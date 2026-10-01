@@ -36,6 +36,7 @@ export const CREATURE = {
   walkSpeed: 80, // pixels per second
   gravity: 1200, // pixels per second squared
   maxStep: 12, // highest bump it can walk up, in pixels
+  collisionHeight: 40, // only the lowest part of a drawing bumps into lines
   wobbleDegrees: 6,
   wobblePerMs: 0.01,
   hopHeight: 4,
