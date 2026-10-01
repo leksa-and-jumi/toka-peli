@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { boundsOf, lastPicture, type Stroke, strokesTouch, toLocal } from './sketch';
+import {
+  boundsOf,
+  eraseAlong,
+  lastPicture,
+  splitSegment,
+  type Stroke,
+  strokesTouch,
+  toLocal,
+} from './sketch';
 
 const line = { from: { x: 10, y: 20 }, to: { x: 30, y: 5 } };
 
@@ -48,5 +56,49 @@ describe('lastPicture', () => {
 
   it('follows strokes connected through other strokes', () => {
     expect(lastPicture([across, farAway, belowDown, down], 3)).toEqual([0, 2, 3]);
+  });
+});
+
+describe('eraseAlong', () => {
+  const row: Stroke = [0, 10, 20, 30].map((x) => ({
+    from: { x, y: 0 },
+    to: { x: x + 10, y: 0 },
+  }));
+  const dot = (x: number, y: number) => ({ from: { x, y }, to: { x, y } });
+
+  it('returns null when the eraser touches nothing', () => {
+    expect(eraseAlong([row], dot(20, 50), 5)).toBeNull();
+  });
+
+  it('splits a stroke wiped in the middle', () => {
+    const result = eraseAlong([row], dot(20, 0), 1);
+    expect(result).toHaveLength(2);
+    expect(result?.[0]).toEqual([row[0]]);
+    expect(result?.[1]).toEqual([row[3]]);
+  });
+
+  it('removes a stroke wiped completely', () => {
+    const sweep = { from: { x: -5, y: 0 }, to: { x: 45, y: 0 } };
+    expect(eraseAlong([row], sweep, 2)).toEqual([]);
+  });
+});
+
+describe('splitSegment', () => {
+  it('cuts a long line into equal short pieces', () => {
+    const pieces = splitSegment({ from: { x: 0, y: 0 }, to: { x: 30, y: 0 } }, 10);
+    expect(pieces).toEqual([
+      { from: { x: 0, y: 0 }, to: { x: 10, y: 0 } },
+      { from: { x: 10, y: 0 }, to: { x: 20, y: 0 } },
+      { from: { x: 20, y: 0 }, to: { x: 30, y: 0 } },
+    ]);
+  });
+
+  it('keeps a short line or a dot as it is', () => {
+    const dot = { from: { x: 5, y: 5 }, to: { x: 5, y: 5 } };
+    expect(splitSegment(dot, 10)).toEqual([dot]);
+  });
+
+  it('rejects a zero length', () => {
+    expect(() => splitSegment({ from: { x: 0, y: 0 }, to: { x: 1, y: 0 } }, 0)).toThrow(RangeError);
   });
 });

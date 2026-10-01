@@ -2,16 +2,19 @@ import Phaser from 'phaser';
 import {
   COLORS,
   CREATURE,
+  ERASER_WIDTH,
   FLOOR_THICKNESS,
   FLOOR_Y,
   GAME_HEIGHT,
   GAME_WIDTH,
   HELP_TEXT,
   HINT_TEXT,
+  PEN_MAX_PIECE,
   PEN_MIN_STEP,
   PEN_WIDTH,
   PICTURE_REACH,
   SOLID_CELL,
+  TOOL_BUTTON,
 } from '../config';
 import {
   type Creature,
@@ -20,8 +23,17 @@ import {
   stepCreature,
 } from '../logic/creature';
 import { type Point, shouldDrawTo } from '../logic/drawing';
-import { boundsOf, lastPicture, type Segment, type Stroke, toLocal } from '../logic/sketch';
+import {
+  boundsOf,
+  eraseAlong,
+  lastPicture,
+  type Segment,
+  splitSegment,
+  type Stroke,
+  toLocal,
+} from '../logic/sketch';
 import { SolidGrid } from '../logic/solidGrid';
+import { type Tool, toggleTool, toolLabel } from '../logic/tool';
 
 interface LivingDrawing {
   state: Creature;
@@ -38,7 +50,7 @@ const RULES: CreatureRules = {
 
 /**
  * Every line drawn is a bridge. Press K and the newest picture comes alive
- * and walks along the bridges.
+ * and walks along the bridges. P or the corner button switches to the eraser.
  */
 export class MainScene extends Phaser.Scene {
   private pen!: Phaser.GameObjects.Graphics;
@@ -47,6 +59,9 @@ export class MainScene extends Phaser.Scene {
   private readonly solid = new SolidGrid(GAME_WIDTH, GAME_HEIGHT, SOLID_CELL, FLOOR_Y);
   private living: LivingDrawing[] = [];
   private hint!: Phaser.GameObjects.Text;
+  private tool: Tool = 'pen';
+  private toolButton!: Phaser.GameObjects.Text;
+  private eraserRing!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('MainScene');
@@ -58,12 +73,10 @@ export class MainScene extends Phaser.Scene {
     this.setUpDrawing();
 
     this.add
-      .text(
-        GAME_WIDTH / 2,
-        HELP_TEXT.y,
-        'Piirrä siltoja ja ukko. Paina K, niin ukko herää henkiin!',
-        { fontSize: HELP_TEXT.fontSize, color: COLORS.text },
-      )
+      .text(GAME_WIDTH / 2, HELP_TEXT.y, 'Piirrä siltoja ja ukko. K = ukko herää, P = kumi', {
+        fontSize: HELP_TEXT.fontSize,
+        color: COLORS.text,
+      })
       .setOrigin(0.5);
     this.hint = this.add
       .text(GAME_WIDTH / 2, HINT_TEXT.y, 'Piirrä ensin ukko! ✏️', {
@@ -78,6 +91,21 @@ export class MainScene extends Phaser.Scene {
       throw new Error('Keyboard input is not available');
     }
     keyboard.on('keydown-K', () => this.wakeUp());
+    keyboard.on('keydown-P', () => this.switchTool());
+
+    this.toolButton = this.add
+      .text(TOOL_BUTTON.x, TOOL_BUTTON.y, toolLabel(this.tool), {
+        fontSize: TOOL_BUTTON.fontSize,
+        color: COLORS.text,
+      })
+      .setOrigin(1, 1)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.switchTool());
+
+    // Shows how big the eraser is, since the mouse arrow is hidden while erasing.
+    this.eraserRing = this.add.graphics().setVisible(false);
+    this.eraserRing.lineStyle(2, COLORS.eraserRing);
+    this.eraserRing.strokeCircle(0, 0, ERASER_WIDTH / 2);
   }
 
   update(time: number, delta: number): void {
@@ -95,17 +123,23 @@ export class MainScene extends Phaser.Scene {
   }
 
   private setUpDrawing(): void {
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.lastPenPoint = { x: pointer.x, y: pointer.y };
-      this.strokes.push([]);
-      // A single click leaves a dot.
-      this.drawSegment({ from: this.lastPenPoint, to: this.lastPenPoint });
-    });
+    this.input.on(
+      'pointerdown',
+      (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+        // Clicking the tool button must not draw.
+        if (over.includes(this.toolButton)) return;
+        this.lastPenPoint = { x: pointer.x, y: pointer.y };
+        if (this.tool === 'pen') this.strokes.push([]);
+        // A single click leaves a dot (or wipes one spot).
+        this.useTool({ from: this.lastPenPoint, to: this.lastPenPoint });
+      },
+    );
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       const next = { x: pointer.x, y: pointer.y };
+      this.eraserRing.setPosition(next.x, next.y);
       if (!pointer.isDown || !this.lastPenPoint) return;
       if (!shouldDrawTo(this.lastPenPoint, next, PEN_MIN_STEP)) return;
-      this.drawSegment({ from: this.lastPenPoint, to: next });
+      this.useTool({ from: this.lastPenPoint, to: next });
       this.lastPenPoint = next;
     });
     const stopDrawing = (): void => {
@@ -115,10 +149,32 @@ export class MainScene extends Phaser.Scene {
     this.input.on('pointerupoutside', stopDrawing);
   }
 
+  private useTool(path: Segment): void {
+    if (this.tool === 'pen') {
+      this.drawSegment(path);
+      return;
+    }
+    const left = eraseAlong(this.strokes, path, ERASER_WIDTH / 2);
+    if (left) {
+      this.strokes = left;
+      this.redrawBridges();
+    }
+  }
+
+  private switchTool(): void {
+    this.tool = toggleTool(this.tool);
+    this.toolButton.setText(toolLabel(this.tool));
+    const erasing = this.tool === 'eraser';
+    this.eraserRing.setVisible(erasing);
+    this.input.setDefaultCursor(erasing ? 'none' : 'default');
+  }
+
   private drawSegment(segment: Segment): void {
-    this.strokes[this.strokes.length - 1]?.push(segment);
-    paintSegment(this.pen, segment);
-    this.solid.stamp(segment, PEN_WIDTH / 2);
+    for (const piece of splitSegment(segment, PEN_MAX_PIECE)) {
+      this.strokes[this.strokes.length - 1]?.push(piece);
+      paintSegment(this.pen, piece);
+      this.solid.stamp(piece, PEN_WIDTH / 2);
+    }
   }
 
   /** Turn the newest picture into a living drawing; the other lines stay bridges. */
