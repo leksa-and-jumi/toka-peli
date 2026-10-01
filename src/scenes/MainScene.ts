@@ -78,10 +78,15 @@ export class MainScene extends Phaser.Scene {
     this.setUpDrawing();
 
     this.add
-      .text(GAME_WIDTH / 2, HELP_TEXT.y, 'Piirrä siltoja ja ukko. K = ukko herää, P = kumi', {
-        fontSize: HELP_TEXT.fontSize,
-        color: COLORS.text,
-      })
+      .text(
+        GAME_WIDTH / 2,
+        HELP_TEXT.y,
+        'Piirrä siltoja ja ukko. K = ukko herää, P = kumi, S = pyyhi kaikki',
+        {
+          fontSize: HELP_TEXT.fontSize,
+          color: COLORS.text,
+        },
+      )
       .setOrigin(0.5);
     this.hint = this.add
       .text(GAME_WIDTH / 2, HINT_TEXT.y, 'Piirrä ensin ukko! ✏️', {
@@ -97,6 +102,7 @@ export class MainScene extends Phaser.Scene {
     }
     keyboard.on('keydown-K', () => this.wakeUp());
     keyboard.on('keydown-P', () => this.switchTool());
+    keyboard.on('keydown-S', () => this.clearAll());
 
     this.toolButton = this.add
       .text(TOOL_BUTTON.x, TOOL_BUTTON.y, toolLabel(this.tool), {
@@ -234,6 +240,17 @@ export class MainScene extends Phaser.Scene {
     });
 
     this.strokes = this.strokes.filter((_, index) => !picked.includes(index));
+    this.redrawBridges();
+  }
+
+  /** Wipe everything: all lines, bridges and living drawings. */
+  private clearAll(): void {
+    for (const drawing of this.living) {
+      drawing.body.destroy();
+    }
+    this.living = [];
+    this.strokes = [];
+    this.lastPenPoint = null;
     this.redrawBridges();
   }
 
