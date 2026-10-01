@@ -16,6 +16,7 @@ Peli julkaistaan GitHub Pagesiin aina, kun uusi versio valmistuu.
 - Kaikki viivat ovat **siltoja** 🌉. Ukot kävelevät niiden päällä, kiipeävät mäkiä ja kääntyvät seinistä.
 - Paina **K**, niin viimeksi piirtämäsi ukko herää henkiin ja alkaa kävellä! 🪄🚶 Jokainen ukko saa herätessään oman värin 🌈.
 - Piirrä lisää ja paina taas K, niin saat monta ukkoa.
+- Ylhäällä on **viisi hassua hahmoa** 🤡: hassu ukko, kissa, robotti, kummitus ja lumiukko. Klikkaa hahmoa, niin se hyppää peliin ja lähtee kävelemään!
 - Paina **S**, niin kaikki pyyhitään pois ja saat tyhjän paperin 🧹.
 - Paina **P** tai klikkaa oikean alakulman nappia, niin kynä muuttuu **kumiksi** 🧽. Kumilla pyyhit viivoja ja siltoja pois. Paina P uudestaan, niin pääset taas piirtämään.
 
