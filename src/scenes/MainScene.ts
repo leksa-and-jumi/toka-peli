@@ -23,6 +23,7 @@ import {
 import { eraseFromBody } from '../logic/bodyErase';
 import { creatureColour } from '../logic/colours';
 import {
+  areFoes,
   bodyBox,
   bounceApart,
   bumpDamage,
@@ -54,6 +55,8 @@ import { type Tool, toggleTool, toolLabel } from '../logic/tool';
 import { burstStars, drawHealthBar, floatNumber, poof, popWord, squash } from '../objects/effects';
 
 interface LivingDrawing {
+  /** Ready-made characters share a kind by name; every own drawing is its own kind. */
+  kind: string;
   state: Creature;
   size: CreatureSize;
   /** Its lines, measured from its feet. */
@@ -179,6 +182,7 @@ export class MainScene extends Phaser.Scene {
         const a = this.living[i] as LivingDrawing;
         const b = this.living[j] as LivingDrawing;
         if (a.cooldown > 0 || b.cooldown > 0) continue;
+        if (!areFoes(a.kind, b.kind)) continue;
         const boxA = bodyBox(a.state.x, a.state.y, a.size);
         const boxB = bodyBox(b.state.x, b.state.y, b.size);
         if (!overlaps(boxA, boxB)) continue;
@@ -335,7 +339,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   /** Make a living drawing from lines on the screen. Returns false if there were none. */
-  private bringToLife(pictureStrokes: Stroke[]): boolean {
+  private bringToLife(pictureStrokes: Stroke[], kind = `piirros-${this.wokenCount}`): boolean {
     const bounds = boundsOf(pictureStrokes.flat(), PEN_WIDTH / 2);
     if (!bounds) return false;
     // The body turns around its feet: the middle of its bottom edge.
@@ -348,6 +352,7 @@ export class MainScene extends Phaser.Scene {
     const art = this.add.graphics();
     paintStrokes(art, strokes, colour);
     this.living.push({
+      kind,
       state: { x: feet.x, y: feet.y, fallSpeed: 0, dir },
       size: { halfWidth: (bounds.right - bounds.left) / 2, height: bounds.bottom - bounds.top },
       strokes,
@@ -397,7 +402,7 @@ export class MainScene extends Phaser.Scene {
     const height = bounds ? -bounds.top : 0;
     const feet = { x, y: FIGURE_BUTTONS.spawnTop + height };
     const placed = figure.strokes.map((stroke) => toLocal(stroke, { x: -feet.x, y: -feet.y }));
-    this.bringToLife(placed);
+    this.bringToLife(placed, figure.name);
   }
 
   /** Wipe everything: all lines, bridges and living drawings. */
