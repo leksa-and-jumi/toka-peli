@@ -4,19 +4,13 @@ export const GAME_HEIGHT = 600;
 
 export const COLORS = {
   background: 0xffffff,
-  player: 0x4fc3f7,
-  star: 0xffd54f,
   pen: 0x222222,
   // Dark text so it shows up on the white background.
   text: '#222222',
 } as const;
 
-export const PLAYER_SIZE = 40;
-export const PLAYER_SPEED = 300; // pixels per second
-
-export const STAR_SIZE = 20;
-export const POINTS_PER_STAR = 1;
-
 /** Mouse drawing. */
 export const PEN_WIDTH = 6;
 export const PEN_MIN_STEP = 2; // pixels the mouse must move before a new line piece
+
+export const HELP_TEXT = { y: GAME_HEIGHT - 24, fontSize: '18px' } as const;
