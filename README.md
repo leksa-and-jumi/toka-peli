@@ -12,10 +12,9 @@ Peli julkaistaan GitHub Pagesiin aina, kun uusi versio valmistuu.
 
 ## Miten pelataan
 
-- Liiku **nuolinäppäimillä**.
-- Kerää **keltaisia tähtiä**. Jokaisesta saa pisteen.
+- Piirrä **hiirellä**: paina nappi pohjaan ja liikuta hiirtä ✏️.
 
-_Tämä on aloituspohja. Julius päättää, millainen oikeasta pelistä tulee!_
+_Peli on vielä kesken. Julius rakentaa peliä, jossa piirretty hahmo herää henkiin ja kävelee piirrettyjä siltoja pitkin!_ 🪄
 
 ## Tekijät
 
