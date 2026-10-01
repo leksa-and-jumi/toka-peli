@@ -3,16 +3,20 @@ import {
   COLORS,
   GAME_HEIGHT,
   GAME_WIDTH,
+  PEN_MIN_STEP,
+  PEN_WIDTH,
   PLAYER_SIZE,
   PLAYER_SPEED,
   POINTS_PER_STAR,
   STAR_SIZE,
 } from '../config';
 import { clamp, randomPosition } from '../logic/bounds';
+import { type Point, shouldDrawTo } from '../logic/drawing';
 import { addPoints, formatScore } from '../logic/score';
 
 /**
  * Starter scene: move the square with the arrow keys and collect stars.
+ * Hold the mouse button down to draw on the screen.
  * This is a placeholder until Julius designs the real game.
  */
 export class MainScene extends Phaser.Scene {
@@ -21,12 +25,18 @@ export class MainScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private scoreText!: Phaser.GameObjects.Text;
   private score = 0;
+  private pen!: Phaser.GameObjects.Graphics;
+  private lastPenPoint: Point | null = null;
 
   constructor() {
     super('MainScene');
   }
 
   create(): void {
+    // Drawn first so the drawing stays behind the player and the star.
+    this.pen = this.add.graphics();
+    this.setUpDrawing();
+
     this.player = this.add.rectangle(
       GAME_WIDTH / 2,
       GAME_HEIGHT / 2,
@@ -42,7 +52,7 @@ export class MainScene extends Phaser.Scene {
       color: COLORS.text,
     });
     this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 24, 'Liiku nuolinäppäimillä ja kerää tähtiä!', {
+      .text(GAME_WIDTH / 2, GAME_HEIGHT - 24, 'Liiku nuolilla ja kerää tähtiä. Piirrä hiirellä!', {
         fontSize: '18px',
         color: COLORS.text,
       })
@@ -78,6 +88,31 @@ export class MainScene extends Phaser.Scene {
       this.scoreText.setText(formatScore(this.score));
       this.moveStar();
     }
+  }
+
+  private setUpDrawing(): void {
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      this.lastPenPoint = { x: pointer.x, y: pointer.y };
+      // A single click leaves a dot.
+      this.pen.fillStyle(COLORS.pen);
+      this.pen.fillCircle(pointer.x, pointer.y, PEN_WIDTH / 2);
+    });
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      const next = { x: pointer.x, y: pointer.y };
+      if (!pointer.isDown || !this.lastPenPoint) return;
+      if (!shouldDrawTo(this.lastPenPoint, next, PEN_MIN_STEP)) return;
+      this.pen.lineStyle(PEN_WIDTH, COLORS.pen);
+      this.pen.lineBetween(this.lastPenPoint.x, this.lastPenPoint.y, next.x, next.y);
+      // Round joints so the line has no gaps.
+      this.pen.fillStyle(COLORS.pen);
+      this.pen.fillCircle(next.x, next.y, PEN_WIDTH / 2);
+      this.lastPenPoint = next;
+    });
+    const stopDrawing = (): void => {
+      this.lastPenPoint = null;
+    };
+    this.input.on('pointerup', stopDrawing);
+    this.input.on('pointerupoutside', stopDrawing);
   }
 
   private moveStar(): void {
