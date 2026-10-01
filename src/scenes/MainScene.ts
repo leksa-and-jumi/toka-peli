@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   COLORS,
+  ERASER_WIDTH,
   GAME_HEIGHT,
   GAME_WIDTH,
   PEN_MIN_STEP,
@@ -9,14 +10,16 @@ import {
   PLAYER_SPEED,
   POINTS_PER_STAR,
   STAR_SIZE,
+  TOOL_BUTTON,
 } from '../config';
 import { clamp, randomPosition } from '../logic/bounds';
 import { type Point, shouldDrawTo } from '../logic/drawing';
 import { addPoints, formatScore } from '../logic/score';
+import { brushWidth, type Tool, toggleTool, toolLabel } from '../logic/tool';
 
 /**
  * Starter scene: move the square with the arrow keys and collect stars.
- * Hold the mouse button down to draw on the screen.
+ * Hold the mouse button down to draw on the screen. K or the button switches to the eraser.
  * This is a placeholder until Julius designs the real game.
  */
 export class MainScene extends Phaser.Scene {
@@ -25,7 +28,12 @@ export class MainScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private scoreText!: Phaser.GameObjects.Text;
   private score = 0;
-  private pen!: Phaser.GameObjects.Graphics;
+  /** The picture lives here; the brush is stamped onto it or erased from it. */
+  private canvas!: Phaser.GameObjects.RenderTexture;
+  private brush!: Phaser.GameObjects.Graphics;
+  private eraserRing!: Phaser.GameObjects.Graphics;
+  private toolButton!: Phaser.GameObjects.Text;
+  private tool: Tool = 'pen';
   private lastPenPoint: Point | null = null;
 
   constructor() {
@@ -34,7 +42,8 @@ export class MainScene extends Phaser.Scene {
 
   create(): void {
     // Drawn first so the drawing stays behind the player and the star.
-    this.pen = this.add.graphics();
+    this.canvas = this.add.renderTexture(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0);
+    this.brush = this.make.graphics({}, false);
     this.setUpDrawing();
 
     this.player = this.add.rectangle(
@@ -52,10 +61,15 @@ export class MainScene extends Phaser.Scene {
       color: COLORS.text,
     });
     this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 24, 'Liiku nuolilla ja kerää tähtiä. Piirrä hiirellä!', {
-        fontSize: '18px',
-        color: COLORS.text,
-      })
+      .text(
+        GAME_WIDTH / 2,
+        GAME_HEIGHT - 24,
+        'Liiku nuolilla ja kerää tähtiä. Piirrä hiirellä! K = kumi',
+        {
+          fontSize: '18px',
+          color: COLORS.text,
+        },
+      )
       .setOrigin(0.5);
 
     const keyboard = this.input.keyboard;
@@ -63,6 +77,21 @@ export class MainScene extends Phaser.Scene {
       throw new Error('Keyboard input is not available');
     }
     this.cursors = keyboard.createCursorKeys();
+    keyboard.on('keydown-K', () => this.switchTool());
+
+    this.toolButton = this.add
+      .text(TOOL_BUTTON.x, TOOL_BUTTON.y, toolLabel(this.tool), {
+        fontSize: TOOL_BUTTON.fontSize,
+        color: COLORS.text,
+      })
+      .setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.switchTool());
+
+    // Shows how big the eraser is, since the mouse arrow is hidden while erasing.
+    this.eraserRing = this.add.graphics().setVisible(false);
+    this.eraserRing.lineStyle(2, COLORS.eraserRing);
+    this.eraserRing.strokeCircle(0, 0, ERASER_WIDTH / 2);
   }
 
   update(_time: number, delta: number): void {
@@ -91,21 +120,22 @@ export class MainScene extends Phaser.Scene {
   }
 
   private setUpDrawing(): void {
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.lastPenPoint = { x: pointer.x, y: pointer.y };
-      // A single click leaves a dot.
-      this.pen.fillStyle(COLORS.pen);
-      this.pen.fillCircle(pointer.x, pointer.y, PEN_WIDTH / 2);
-    });
+    this.input.on(
+      'pointerdown',
+      (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+        // Clicking the tool button must not draw.
+        if (over.includes(this.toolButton)) return;
+        this.lastPenPoint = { x: pointer.x, y: pointer.y };
+        // A single click leaves a dot.
+        this.paint(this.lastPenPoint, this.lastPenPoint);
+      },
+    );
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       const next = { x: pointer.x, y: pointer.y };
+      this.eraserRing.setPosition(next.x, next.y);
       if (!pointer.isDown || !this.lastPenPoint) return;
       if (!shouldDrawTo(this.lastPenPoint, next, PEN_MIN_STEP)) return;
-      this.pen.lineStyle(PEN_WIDTH, COLORS.pen);
-      this.pen.lineBetween(this.lastPenPoint.x, this.lastPenPoint.y, next.x, next.y);
-      // Round joints so the line has no gaps.
-      this.pen.fillStyle(COLORS.pen);
-      this.pen.fillCircle(next.x, next.y, PEN_WIDTH / 2);
+      this.paint(this.lastPenPoint, next);
       this.lastPenPoint = next;
     });
     const stopDrawing = (): void => {
@@ -113,6 +143,30 @@ export class MainScene extends Phaser.Scene {
     };
     this.input.on('pointerup', stopDrawing);
     this.input.on('pointerupoutside', stopDrawing);
+  }
+
+  /** Draw (or erase) one round-ended line piece from `from` to `to`. */
+  private paint(from: Point, to: Point): void {
+    const width = brushWidth(this.tool, PEN_WIDTH, ERASER_WIDTH);
+    this.brush.clear();
+    this.brush.lineStyle(width, COLORS.pen);
+    this.brush.lineBetween(from.x, from.y, to.x, to.y);
+    this.brush.fillStyle(COLORS.pen);
+    this.brush.fillCircle(from.x, from.y, width / 2);
+    this.brush.fillCircle(to.x, to.y, width / 2);
+    if (this.tool === 'pen') {
+      this.canvas.draw(this.brush);
+    } else {
+      this.canvas.erase(this.brush);
+    }
+  }
+
+  private switchTool(): void {
+    this.tool = toggleTool(this.tool);
+    this.toolButton.setText(toolLabel(this.tool));
+    const erasing = this.tool === 'eraser';
+    this.eraserRing.setVisible(erasing);
+    this.input.setDefaultCursor(erasing ? 'none' : 'default');
   }
 
   private moveStar(): void {
