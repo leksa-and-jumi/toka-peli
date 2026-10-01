@@ -20,7 +20,34 @@ describe('stepCreature', () => {
     const next = stepCreature({ ...standing, y: 100 }, size, rules, emptyWorld(), 0.1);
     expect(next.y).toBeGreaterThan(100);
     expect(next.fallSpeed).toBe(100);
-    expect(next.x).toBe(400);
+    // It drifts forward while falling.
+    expect(next.x).toBe(410);
+  });
+
+  it('hops up and comes back down to the floor', () => {
+    let creature: Creature = { ...standing, fallSpeed: -300 };
+    creature = stepCreature(creature, size, rules, emptyWorld(), 0.1);
+    expect(creature.y).toBe(FLOOR - 30);
+    for (let i = 0; i < 120; i++)
+      creature = stepCreature(creature, size, rules, emptyWorld(), 1 / 60);
+    // Lands within a pixel of the floor.
+    expect(Math.abs(creature.y - FLOOR)).toBeLessThan(1);
+    expect(creature.fallSpeed).toBe(0);
+  });
+
+  it('drifts forward while it is in the air', () => {
+    const next = stepCreature({ ...standing, fallSpeed: -300 }, size, rules, emptyWorld(), 0.1);
+    expect(next.x).toBe(410);
+    const falling = stepCreature({ ...standing, y: 100, dir: -1 }, size, rules, emptyWorld(), 0.1);
+    expect(falling.x).toBe(390);
+  });
+
+  it('stops hopping when its head bumps a line', () => {
+    const world = emptyWorld();
+    world.stamp({ from: { x: 380, y: 455 }, to: { x: 420, y: 455 } }, 3);
+    const next = stepCreature({ ...standing, fallSpeed: -600 }, size, rules, world, 0.1);
+    expect(next.y).toBeGreaterThan(FLOOR - 15);
+    expect(next.fallSpeed).toBe(0);
   });
 
   it('lands on the floor', () => {

@@ -66,3 +66,52 @@ export const FIGURE_BUTTONS = {
   // Where a picked character's top appears, just below the buttons; then it falls.
   spawnTop: 125,
 } as const;
+
+/** Bump battles: every creature has energy, bumps cost energy, bigger hits harder. */
+export const COMBAT = {
+  maxHealth: 100,
+  damage: { base: 14, minFactor: 0.4, maxFactor: 2.5 },
+  cooldownSeconds: 0.5, // a creature can't be bumped again right away
+  hopSpeed: 380, // pixels per second upwards after a bump
+  pushMargin: 2, // extra pixels between creatures after a bump
+  squash: { x: 1.3, y: 0.65, ms: 140 },
+  shakeAboveDamage: 20,
+  shake: { ms: 120, intensity: 0.006 },
+  words: ['PUM!', 'BONK!', 'KOPS!', 'PÄM!', 'PLOINK!', 'TÖKS!', 'BOING!', 'KABUM!'],
+} as const;
+
+/** Small creatures scurry, big ones lumber. */
+export const WALK_SPEED = {
+  base: CREATURE.walkSpeed,
+  referenceHeight: 70,
+  minFactor: 0.6,
+  maxFactor: 1.7,
+} as const;
+
+export const HEALTH_BAR = {
+  width: 40,
+  height: 6,
+  gap: 10, // pixels above the head
+  colours: { good: 0x43a047, ok: 0xfdd835, low: 0xe53935, back: 0xdddddd, edge: 0x555555 },
+} as const;
+
+export const EFFECTS = {
+  wordFontSize: '34px',
+  wordStroke: '#222222',
+  wordMs: 650,
+  stars: 7,
+  starColour: 0xffc107,
+  starSize: 7,
+  starFlyDistance: 55,
+  starMs: 500,
+  numberFontSize: '18px',
+  numberColour: '#e53935',
+  numberRise: 35,
+  numberMs: 800,
+  puffs: 9,
+  puffColour: 0xbdbdbd,
+  puffMs: 600,
+  dieMs: 550,
+  ghostRise: 90,
+  ghostMs: 1400,
+} as const;
