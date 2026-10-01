@@ -11,6 +11,18 @@ export const COLORS = {
   text: '#222222',
 } as const;
 
+/** Bright colours the creatures get when they wake up, in order. */
+export const CREATURE_COLOURS = [
+  0xe53935, // red
+  0x1e88e5, // blue
+  0x43a047, // green
+  0xfb8c00, // orange
+  0x8e24aa, // purple
+  0xd81b60, // pink
+  0x00acc1, // turquoise
+  0xfdd835, // yellow
+] as const;
+
 /** Mouse drawing. */
 export const PEN_WIDTH = 6;
 export const ERASER_WIDTH = 30;
