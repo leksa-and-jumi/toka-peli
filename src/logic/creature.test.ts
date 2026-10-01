@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { type Creature, type CreatureRules, stepCreature } from './creature';
 import { SolidGrid } from './solidGrid';
 
-const rules: CreatureRules = { walkSpeed: 100, gravity: 1000, maxStep: 8, worldWidth: 800 };
+const rules: CreatureRules = {
+  walkSpeed: 100,
+  gravity: 1000,
+  maxStep: 8,
+  collisionHeight: 40,
+  worldWidth: 800,
+};
 const size = { halfWidth: 10, height: 30 };
 const FLOOR = 500;
 const standing: Creature = { x: 400, y: FLOOR, fallSpeed: 0, dir: 1 };
@@ -69,10 +75,31 @@ describe('stepCreature', () => {
     expect(left).toMatchObject({ x: 10, dir: 1 });
   });
 
-  it('climbs out when a line is drawn through it', () => {
+  it('hops up onto a low line drawn through it', () => {
     const world = emptyWorld();
     world.stamp({ from: { x: 380, y: 490 }, to: { x: 420, y: 490 } }, 3);
-    expect(stepCreature(standing, size, rules, world, 0.1).y).toBe(FLOOR - 1);
+    const next = stepCreature(standing, size, rules, world, 0.1);
+    expect(next.y).toBeLessThan(487);
+    expect(next.y).toBeGreaterThan(475);
+  });
+
+  it('walks through a tall line drawn through it instead of flying up', () => {
+    const world = emptyWorld();
+    world.stamp({ from: { x: 400, y: 0 }, to: { x: 400, y: 500 } }, 3);
+    let creature = standing;
+    for (let i = 0; i < 120; i++) creature = stepCreature(creature, size, rules, world, 1 / 60);
+    expect(creature.y).toBe(FLOOR);
+    expect(creature.x).toBeGreaterThan(410);
+  });
+
+  it('ignores lines above its lower body', () => {
+    const tall = { halfWidth: 10, height: 200 };
+    const world = emptyWorld();
+    world.stamp({ from: { x: 380, y: 350 }, to: { x: 420, y: 350 } }, 3);
+    let creature = standing;
+    for (let i = 0; i < 60; i++) creature = stepCreature(creature, tall, rules, world, 1 / 60);
+    expect(creature.y).toBe(FLOOR);
+    expect(creature.x).toBeGreaterThan(450);
   });
 
   it('stands still when it is wider than the world', () => {
