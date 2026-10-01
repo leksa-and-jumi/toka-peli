@@ -16,6 +16,7 @@ import {
   SOLID_CELL,
   TOOL_BUTTON,
 } from '../config';
+import { eraseFromBody } from '../logic/bodyErase';
 import {
   type Creature,
   type CreatureRules,
@@ -38,6 +39,9 @@ import { type Tool, toggleTool, toolLabel } from '../logic/tool';
 interface LivingDrawing {
   state: Creature;
   size: CreatureSize;
+  /** Its lines, measured from its feet. */
+  strokes: Stroke[];
+  art: Phaser.GameObjects.Graphics;
   body: Phaser.GameObjects.Container;
 }
 
@@ -159,6 +163,35 @@ export class MainScene extends Phaser.Scene {
       this.strokes = left;
       this.redrawBridges();
     }
+    this.eraseLiving(path);
+  }
+
+  /** The eraser also wipes living drawings; one wiped away completely disappears. */
+  private eraseLiving(path: Segment): void {
+    this.living = this.living.filter((drawing) => {
+      const cut = eraseFromBody(
+        drawing.strokes,
+        path,
+        ERASER_WIDTH / 2,
+        PEN_WIDTH / 2,
+        drawing.state,
+      );
+      if (cut === null) return true;
+      if (cut === 'gone') {
+        drawing.body.destroy();
+        return false;
+      }
+      drawing.strokes = cut.strokes;
+      drawing.size = cut.size;
+      drawing.state = {
+        ...drawing.state,
+        x: drawing.state.x + cut.feetShift.x,
+        y: drawing.state.y + cut.feetShift.y,
+      };
+      drawing.art.clear();
+      paintStrokes(drawing.art, cut.strokes);
+      return true;
+    });
   }
 
   private switchTool(): void {
@@ -180,21 +213,22 @@ export class MainScene extends Phaser.Scene {
   /** Turn the newest picture into a living drawing; the other lines stay bridges. */
   private wakeUp(): void {
     const picked = lastPicture(this.strokes, PICTURE_REACH);
-    const segments = picked.flatMap((index) => this.strokes[index] ?? []);
-    const bounds = boundsOf(segments, PEN_WIDTH / 2);
+    const pictureStrokes = picked.map((index) => this.strokes[index] ?? []);
+    const bounds = boundsOf(pictureStrokes.flat(), PEN_WIDTH / 2);
     if (!bounds) {
       this.showHint();
       return;
     }
     // The body turns around its feet: the middle of its bottom edge.
     const feet = { x: (bounds.left + bounds.right) / 2, y: bounds.bottom };
+    const strokes = pictureStrokes.map((stroke) => toLocal(stroke, feet));
     const art = this.add.graphics();
-    for (const segment of toLocal(segments, feet)) {
-      paintSegment(art, segment);
-    }
+    paintStrokes(art, strokes);
     this.living.push({
       state: { x: feet.x, y: feet.y, fallSpeed: 0, dir: 1 },
       size: { halfWidth: (bounds.right - bounds.left) / 2, height: bounds.bottom - bounds.top },
+      strokes,
+      art,
       body: this.add.container(feet.x, feet.y, [art]),
     });
 
@@ -215,6 +249,12 @@ export class MainScene extends Phaser.Scene {
   private showHint(): void {
     this.hint.setVisible(true);
     this.time.delayedCall(HINT_TEXT.showMs, () => this.hint.setVisible(false));
+  }
+}
+
+function paintStrokes(graphics: Phaser.GameObjects.Graphics, strokes: readonly Stroke[]): void {
+  for (const segment of strokes.flat()) {
+    paintSegment(graphics, segment);
   }
 }
 
