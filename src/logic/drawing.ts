@@ -21,3 +21,13 @@ export function shouldDrawTo(last: Point | null, next: Point, minDistance: numbe
   }
   return distance(last, next) >= minDistance;
 }
+
+/** Shortest distance from a point to a line piece from `a` to `b`. */
+export function distanceToSegment(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return distance(p, a);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared));
+  return distance(p, { x: a.x + t * dx, y: a.y + t * dy });
+}

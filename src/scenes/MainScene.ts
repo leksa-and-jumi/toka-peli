@@ -4,37 +4,47 @@ import {
   CREATURE,
   FLOOR_THICKNESS,
   FLOOR_Y,
+  GAME_HEIGHT,
   GAME_WIDTH,
   HELP_TEXT,
   HINT_TEXT,
   PEN_MIN_STEP,
   PEN_WIDTH,
+  PICTURE_REACH,
+  SOLID_CELL,
 } from '../config';
-import { type Creature, type CreatureRules, stepCreature } from '../logic/creature';
+import {
+  type Creature,
+  type CreatureRules,
+  type CreatureSize,
+  stepCreature,
+} from '../logic/creature';
 import { type Point, shouldDrawTo } from '../logic/drawing';
-import { boundsOf, type Segment, toLocal } from '../logic/sketch';
+import { boundsOf, lastPicture, type Segment, type Stroke, toLocal } from '../logic/sketch';
+import { SolidGrid } from '../logic/solidGrid';
 
 interface LivingDrawing {
   state: Creature;
-  halfWidth: number;
+  size: CreatureSize;
   body: Phaser.GameObjects.Container;
 }
 
 const RULES: CreatureRules = {
   walkSpeed: CREATURE.walkSpeed,
   gravity: CREATURE.gravity,
-  floorY: FLOOR_Y,
+  maxStep: CREATURE.maxStep,
   worldWidth: GAME_WIDTH,
 };
 
 /**
- * Draw with the mouse, then press K: the drawing comes alive and walks.
- * Each K press wakes up everything drawn since the last one.
+ * Every line drawn is a bridge. Press K and the newest picture comes alive
+ * and walks along the bridges.
  */
 export class MainScene extends Phaser.Scene {
   private pen!: Phaser.GameObjects.Graphics;
-  private sketch: Segment[] = [];
+  private strokes: Stroke[] = [];
   private lastPenPoint: Point | null = null;
+  private readonly solid = new SolidGrid(GAME_WIDTH, GAME_HEIGHT, SOLID_CELL, FLOOR_Y);
   private living: LivingDrawing[] = [];
   private hint!: Phaser.GameObjects.Text;
 
@@ -48,10 +58,12 @@ export class MainScene extends Phaser.Scene {
     this.setUpDrawing();
 
     this.add
-      .text(GAME_WIDTH / 2, HELP_TEXT.y, 'Piirrä ukko hiirellä. Paina K, niin se herää henkiin!', {
-        fontSize: HELP_TEXT.fontSize,
-        color: COLORS.text,
-      })
+      .text(
+        GAME_WIDTH / 2,
+        HELP_TEXT.y,
+        'Piirrä siltoja ja ukko. Paina K, niin ukko herää henkiin!',
+        { fontSize: HELP_TEXT.fontSize, color: COLORS.text },
+      )
       .setOrigin(0.5);
     this.hint = this.add
       .text(GAME_WIDTH / 2, HINT_TEXT.y, 'Piirrä ensin ukko! ✏️', {
@@ -71,9 +83,10 @@ export class MainScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     const seconds = delta / 1000;
     for (const drawing of this.living) {
-      drawing.state = stepCreature(drawing.state, drawing.halfWidth, RULES, seconds);
+      const before = drawing.state;
+      drawing.state = stepCreature(before, drawing.size, RULES, this.solid, seconds);
       const { x, y, dir, fallSpeed } = drawing.state;
-      const walking = fallSpeed === 0 && y >= FLOOR_Y;
+      const walking = fallSpeed === 0 && x !== before.x;
       const swing = walking ? Math.sin(time * CREATURE.wobblePerMs) : 0;
       drawing.body.setPosition(x, y - Math.abs(swing) * CREATURE.hopHeight);
       drawing.body.setAngle(swing * CREATURE.wobbleDegrees);
@@ -84,6 +97,7 @@ export class MainScene extends Phaser.Scene {
   private setUpDrawing(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.lastPenPoint = { x: pointer.x, y: pointer.y };
+      this.strokes.push([]);
       // A single click leaves a dot.
       this.drawSegment({ from: this.lastPenPoint, to: this.lastPenPoint });
     });
@@ -102,13 +116,16 @@ export class MainScene extends Phaser.Scene {
   }
 
   private drawSegment(segment: Segment): void {
-    this.sketch.push(segment);
+    this.strokes[this.strokes.length - 1]?.push(segment);
     paintSegment(this.pen, segment);
+    this.solid.stamp(segment, PEN_WIDTH / 2);
   }
 
-  /** Turn the current sketch into a living drawing that walks. */
+  /** Turn the newest picture into a living drawing; the other lines stay bridges. */
   private wakeUp(): void {
-    const bounds = boundsOf(this.sketch, PEN_WIDTH / 2);
+    const picked = lastPicture(this.strokes, PICTURE_REACH);
+    const segments = picked.flatMap((index) => this.strokes[index] ?? []);
+    const bounds = boundsOf(segments, PEN_WIDTH / 2);
     if (!bounds) {
       this.showHint();
       return;
@@ -116,18 +133,27 @@ export class MainScene extends Phaser.Scene {
     // The body turns around its feet: the middle of its bottom edge.
     const feet = { x: (bounds.left + bounds.right) / 2, y: bounds.bottom };
     const art = this.add.graphics();
-    for (const segment of toLocal(this.sketch, feet)) {
+    for (const segment of toLocal(segments, feet)) {
       paintSegment(art, segment);
     }
-    const body = this.add.container(feet.x, feet.y, [art]);
     this.living.push({
       state: { x: feet.x, y: feet.y, fallSpeed: 0, dir: 1 },
-      halfWidth: (bounds.right - bounds.left) / 2,
-      body,
+      size: { halfWidth: (bounds.right - bounds.left) / 2, height: bounds.bottom - bounds.top },
+      body: this.add.container(feet.x, feet.y, [art]),
     });
 
-    this.sketch = [];
+    this.strokes = this.strokes.filter((_, index) => !picked.includes(index));
+    this.redrawBridges();
+  }
+
+  /** Paint the bridges again and remember where they are. */
+  private redrawBridges(): void {
     this.pen.clear();
+    this.solid.clear();
+    for (const segment of this.strokes.flat()) {
+      paintSegment(this.pen, segment);
+      this.solid.stamp(segment, PEN_WIDTH / 2);
+    }
   }
 
   private showHint(): void {
