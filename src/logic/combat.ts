@@ -76,3 +76,8 @@ export function pushApart(a: Box, b: Box, margin: number): { a: number; b: numbe
   const bCentre = (b.left + b.right) / 2;
   return aCentre <= bCentre ? { a: -half, b: half } : { a: half, b: -half };
 }
+
+/** Only different kinds of creature bump; two cats just walk past each other. */
+export function areFoes(kindA: string, kindB: string): boolean {
+  return kindA !== kindB;
+}

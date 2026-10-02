@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  areFoes,
   bodyBox,
   bounceApart,
   bumpDamage,
@@ -104,5 +105,15 @@ describe('pushApart', () => {
     const a = bodyBox(100, 500, { halfWidth: 10, height: 40 });
     const far = bodyBox(200, 500, { halfWidth: 10, height: 40 });
     expect(pushApart(a, far, 1)).toEqual({ a: 0, b: 0 });
+  });
+});
+
+describe('areFoes', () => {
+  it('lets the same kind walk past each other', () => {
+    expect(areFoes('Kissa', 'Kissa')).toBe(false);
+  });
+
+  it('makes different kinds bump', () => {
+    expect(areFoes('Kissa', 'Robotti')).toBe(true);
   });
 });
