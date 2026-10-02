@@ -1,4 +1,4 @@
-import { distanceToSegment, type Point } from './drawing';
+import { distance, distanceToSegment, type Point } from './drawing';
 
 /** One straight pen line piece. A click is a piece where `from` equals `to`. */
 export interface Segment {
@@ -37,12 +37,17 @@ export function toLocal(segments: readonly Segment[], origin: Point): Segment[] 
 
 /** Do two strokes come within `reach` of each other? */
 export function strokesTouch(a: Stroke, b: Stroke, reach: number): boolean {
-  const near = (s: Segment, t: Segment): boolean =>
+  return a.some((s) => b.some((t) => segmentsNear(s, t, reach)));
+}
+
+/** Do two line pieces come within `reach` of each other? */
+export function segmentsNear(s: Segment, t: Segment, reach: number): boolean {
+  return (
     distanceToSegment(s.from, t.from, t.to) <= reach ||
     distanceToSegment(s.to, t.from, t.to) <= reach ||
     distanceToSegment(t.from, s.from, s.to) <= reach ||
-    distanceToSegment(t.to, s.from, s.to) <= reach;
-  return a.some((s) => b.some((t) => near(s, t)));
+    distanceToSegment(t.to, s.from, s.to) <= reach
+  );
 }
 
 /**
@@ -65,4 +70,49 @@ export function lastPicture(strokes: readonly Stroke[], reach: number): number[]
     });
   }
   return [...found].sort((x, y) => x - y);
+}
+
+/**
+ * Wipe away every line piece the eraser touches while moving along `path`.
+ * A stroke wiped in the middle splits into two strokes. Returns null when
+ * nothing was wiped.
+ */
+export function eraseAlong(
+  strokes: readonly Stroke[],
+  path: Segment,
+  radius: number,
+): Stroke[] | null {
+  let wiped = false;
+  const result: Stroke[] = [];
+  for (const stroke of strokes) {
+    let piece: Stroke = [];
+    for (const segment of stroke) {
+      if (segmentsNear(segment, path, radius)) {
+        wiped = true;
+        if (piece.length > 0) result.push(piece);
+        piece = [];
+      } else {
+        piece.push(segment);
+      }
+    }
+    if (piece.length > 0) result.push(piece);
+  }
+  return wiped ? result : null;
+}
+
+/**
+ * Cut a long line piece into short ones, so the eraser can wipe just a bit
+ * of a line that was drawn with one fast mouse move.
+ */
+export function splitSegment(segment: Segment, maxLength: number): Segment[] {
+  if (maxLength <= 0) {
+    throw new RangeError(`maxLength must be positive, got ${maxLength}`);
+  }
+  const { from, to } = segment;
+  const pieces = Math.max(1, Math.ceil(distance(from, to) / maxLength));
+  const at = (i: number): Point => ({
+    x: from.x + ((to.x - from.x) * i) / pieces,
+    y: from.y + ((to.y - from.y) * i) / pieces,
+  });
+  return Array.from({ length: pieces }, (_, i) => ({ from: at(i), to: at(i + 1) }));
 }
