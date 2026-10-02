@@ -13,6 +13,8 @@ Peli julkaistaan GitHub Pagesiin aina, kun uusi versio valmistuu.
 ## Miten pelataan
 
 - Piirrä **hiirellä**: paina nappi pohjaan ja liikuta hiirtä ✏️.
+- Paina **K**, niin piirtämäsi ukko herää henkiin ja alkaa kävellä! 🪄🚶
+- Piirrä lisää ja paina taas K, niin saat monta ukkoa.
 
 _Peli on vielä kesken. Julius rakentaa peliä, jossa piirretty hahmo herää henkiin ja kävelee piirrettyjä siltoja pitkin!_ 🪄
 
