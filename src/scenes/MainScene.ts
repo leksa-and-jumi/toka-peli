@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   COLORS,
+  COMBAT,
   CREATURE,
   CREATURE_COLOURS,
   FIGURE_BUTTONS,
@@ -17,9 +18,20 @@ import {
   PICTURE_REACH,
   SOLID_CELL,
   TOOL_BUTTON,
+  WALK_SPEED,
 } from '../config';
 import { eraseFromBody } from '../logic/bodyErase';
 import { creatureColour } from '../logic/colours';
+import {
+  bodyBox,
+  bounceApart,
+  bumpDamage,
+  mass,
+  overlaps,
+  pickWord,
+  pushApart,
+  walkSpeedFor,
+} from '../logic/combat';
 import {
   type Creature,
   type CreatureRules,
@@ -39,6 +51,7 @@ import {
 } from '../logic/sketch';
 import { SolidGrid } from '../logic/solidGrid';
 import { type Tool, toggleTool, toolLabel } from '../logic/tool';
+import { burstStars, drawHealthBar, floatNumber, poof, popWord, squash } from '../objects/effects';
 
 interface LivingDrawing {
   state: Creature;
@@ -48,6 +61,10 @@ interface LivingDrawing {
   colour: number;
   art: Phaser.GameObjects.Graphics;
   body: Phaser.GameObjects.Container;
+  health: number;
+  healthBar: Phaser.GameObjects.Graphics;
+  /** Seconds until it can be bumped again. */
+  cooldown: number;
 }
 
 const RULES: CreatureRules = {
@@ -61,6 +78,7 @@ const RULES: CreatureRules = {
 /**
  * Every line drawn is a bridge. Press K and the newest picture comes alive
  * and walks along the bridges. P or the corner button switches to the eraser.
+ * Living drawings bump into each other and lose energy until they go poof.
  */
 export class MainScene extends Phaser.Scene {
   private pen!: Phaser.GameObjects.Graphics;
@@ -134,14 +152,90 @@ export class MainScene extends Phaser.Scene {
     const seconds = delta / 1000;
     for (const drawing of this.living) {
       const before = drawing.state;
-      drawing.state = stepCreature(before, drawing.size, RULES, this.solid, seconds);
+      const rules = { ...RULES, walkSpeed: walkSpeedFor(drawing.size.height, WALK_SPEED) };
+      drawing.state = stepCreature(before, drawing.size, rules, this.solid, seconds);
+      drawing.cooldown = Math.max(0, drawing.cooldown - seconds);
       const { x, y, dir, fallSpeed } = drawing.state;
       const walking = fallSpeed === 0 && x !== before.x;
       const swing = walking ? Math.sin(time * CREATURE.wobblePerMs) : 0;
       drawing.body.setPosition(x, y - Math.abs(swing) * CREATURE.hopHeight);
       drawing.body.setAngle(swing * CREATURE.wobbleDegrees);
       drawing.body.setScale(dir, 1);
+      drawHealthBar(
+        drawing.healthBar,
+        x,
+        y - drawing.size.height,
+        drawing.health,
+        COMBAT.maxHealth,
+      );
     }
+    this.bumpCreatures();
+  }
+
+  /** Creatures that touch bump into each other: both lose energy, the bigger hits harder. */
+  private bumpCreatures(): void {
+    for (let i = 0; i < this.living.length; i++) {
+      for (let j = i + 1; j < this.living.length; j++) {
+        const a = this.living[i] as LivingDrawing;
+        const b = this.living[j] as LivingDrawing;
+        if (a.cooldown > 0 || b.cooldown > 0) continue;
+        const boxA = bodyBox(a.state.x, a.state.y, a.size);
+        const boxB = bodyBox(b.state.x, b.state.y, b.size);
+        if (!overlaps(boxA, boxB)) continue;
+        this.bump(a, b, pushApart(boxA, boxB, COMBAT.pushMargin));
+      }
+    }
+    const fallen = this.living.filter((drawing) => drawing.health <= 0);
+    if (fallen.length > 0) {
+      this.living = this.living.filter((drawing) => drawing.health > 0);
+      fallen.forEach((drawing) => this.goPoof(drawing));
+    }
+  }
+
+  private bump(a: LivingDrawing, b: LivingDrawing, push: { a: number; b: number }): void {
+    const toA = bumpDamage(mass(b.size), mass(a.size), COMBAT.damage);
+    const toB = bumpDamage(mass(a.size), mass(b.size), COMBAT.damage);
+    a.health -= toA;
+    b.health -= toB;
+    const dirs = bounceApart(a.state.x, b.state.x);
+    const keepInside = (x: number, size: CreatureSize): number =>
+      Math.min(GAME_WIDTH - size.halfWidth, Math.max(size.halfWidth, x));
+    a.state = {
+      ...a.state,
+      x: keepInside(a.state.x + push.a, a.size),
+      dir: dirs.a,
+      fallSpeed: -COMBAT.hopSpeed,
+    };
+    b.state = {
+      ...b.state,
+      x: keepInside(b.state.x + push.b, b.size),
+      dir: dirs.b,
+      fallSpeed: -COMBAT.hopSpeed,
+    };
+    a.cooldown = COMBAT.cooldownSeconds;
+    b.cooldown = COMBAT.cooldownSeconds;
+
+    const middle = {
+      x: (a.state.x + b.state.x) / 2,
+      y: Math.min(a.state.y - a.size.height / 2, b.state.y - b.size.height / 2),
+    };
+    popWord(this, middle.x, middle.y - 20, pickWord(COMBAT.words));
+    burstStars(this, middle.x, middle.y);
+    squash(this, a.art, COMBAT.squash);
+    squash(this, b.art, COMBAT.squash);
+    floatNumber(this, a.state.x, a.state.y - a.size.height - 20, toA);
+    floatNumber(this, b.state.x, b.state.y - b.size.height - 20, toB);
+    if (Math.max(toA, toB) > COMBAT.shakeAboveDamage) {
+      this.cameras.main.shake(COMBAT.shake.ms, COMBAT.shake.intensity);
+    }
+  }
+
+  private goPoof(drawing: LivingDrawing): void {
+    drawing.healthBar.destroy();
+    poof(this, drawing.body, {
+      x: drawing.state.x,
+      y: drawing.state.y - drawing.size.height / 2,
+    });
   }
 
   private setUpDrawing(): void {
@@ -197,6 +291,7 @@ export class MainScene extends Phaser.Scene {
       if (cut === null) return true;
       if (cut === 'gone') {
         drawing.body.destroy();
+        drawing.healthBar.destroy();
         return false;
       }
       drawing.strokes = cut.strokes;
@@ -247,16 +342,21 @@ export class MainScene extends Phaser.Scene {
     const feet = { x: (bounds.left + bounds.right) / 2, y: bounds.bottom };
     const strokes = pictureStrokes.map((stroke) => toLocal(stroke, feet));
     const colour = creatureColour(this.wokenCount, CREATURE_COLOURS);
+    // Every other one sets off to the left, so they meet and bump.
+    const dir = this.wokenCount % 2 === 0 ? 1 : -1;
     this.wokenCount += 1;
     const art = this.add.graphics();
     paintStrokes(art, strokes, colour);
     this.living.push({
-      state: { x: feet.x, y: feet.y, fallSpeed: 0, dir: 1 },
+      state: { x: feet.x, y: feet.y, fallSpeed: 0, dir },
       size: { halfWidth: (bounds.right - bounds.left) / 2, height: bounds.bottom - bounds.top },
       strokes,
       colour,
       art,
       body: this.add.container(feet.x, feet.y, [art]),
+      health: COMBAT.maxHealth,
+      healthBar: this.add.graphics().setDepth(8),
+      cooldown: 0,
     });
     return true;
   }
@@ -304,6 +404,7 @@ export class MainScene extends Phaser.Scene {
   private clearAll(): void {
     for (const drawing of this.living) {
       drawing.body.destroy();
+      drawing.healthBar.destroy();
     }
     this.living = [];
     this.strokes = [];

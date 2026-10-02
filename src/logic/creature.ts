@@ -64,6 +64,27 @@ export function stepCreature(
     return walkForward(creature, size, rules, seconds);
   }
 
+  // In the air it keeps drifting forward, so bumped creatures fly apart.
+  if (fallSpeed < 0 || !standing(ground, x, y, size)) {
+    x = airDrift(creature, size, bump, rules, ground, seconds);
+  }
+
+  // Hopping up after a bump: rise until the hop runs out or the head bumps.
+  if (fallSpeed < 0) {
+    let rise = -fallSpeed * seconds;
+    fallSpeed += rules.gravity * seconds;
+    while (rise > 0) {
+      const move = Math.min(1, rise);
+      if (!bodyFree(ground, x, y - move, bump)) {
+        fallSpeed = 0;
+        break;
+      }
+      y -= move;
+      rise -= move;
+    }
+    return { x, y, fallSpeed, dir };
+  }
+
   if (!standing(ground, x, y, size)) {
     fallSpeed += rules.gravity * seconds;
     let drop = fallSpeed * seconds;
@@ -94,6 +115,20 @@ export function stepCreature(
   }
   // A wall too high to climb: turn around.
   return { x, y, fallSpeed: 0, dir: dir === 1 ? -1 : 1 };
+}
+
+/** Where it drifts to sideways while in the air; stays put at walls and world edges. */
+function airDrift(
+  creature: Creature,
+  size: CreatureSize,
+  bump: CreatureSize,
+  rules: CreatureRules,
+  ground: Ground,
+  seconds: number,
+): number {
+  const nextX = creature.x + creature.dir * rules.walkSpeed * seconds;
+  const inside = nextX > size.halfWidth && nextX < rules.worldWidth - size.halfWidth;
+  return inside && bodyFree(ground, nextX, creature.y, bump) ? nextX : creature.x;
 }
 
 /** Take one step forward, turning around at the edges of the world. Ignores lines. */
