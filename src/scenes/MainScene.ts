@@ -49,6 +49,7 @@ const RULES: CreatureRules = {
   walkSpeed: CREATURE.walkSpeed,
   gravity: CREATURE.gravity,
   maxStep: CREATURE.maxStep,
+  collisionHeight: CREATURE.collisionHeight,
   worldWidth: GAME_WIDTH,
 };
 
