@@ -3,6 +3,7 @@ import {
   COLORS,
   CREATURE,
   CREATURE_COLOURS,
+  FIGURE_BUTTONS,
   ERASER_WIDTH,
   FLOOR_THICKNESS,
   FLOOR_Y,
@@ -26,6 +27,7 @@ import {
   stepCreature,
 } from '../logic/creature';
 import { type Point, shouldDrawTo } from '../logic/drawing';
+import { type Figure, makeFigures } from '../logic/figures';
 import {
   boundsOf,
   eraseAlong,
@@ -71,6 +73,8 @@ export class MainScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Text;
   private tool: Tool = 'pen';
   private toolButton!: Phaser.GameObjects.Text;
+  /** Clickable things on screen; pressing them must not draw. */
+  private readonly buttons = new Set<Phaser.GameObjects.GameObject>();
   private eraserRing!: Phaser.GameObjects.Graphics;
 
   constructor() {
@@ -86,7 +90,7 @@ export class MainScene extends Phaser.Scene {
       .text(
         GAME_WIDTH / 2,
         HELP_TEXT.y,
-        'Piirrä siltoja ja ukko. K = ukko herää, P = kumi, S = pyyhi kaikki',
+        'Piirrä tai valitse hahmo. K = herää, P = kumi, S = pyyhi kaikki',
         {
           fontSize: HELP_TEXT.fontSize,
           color: COLORS.text,
@@ -117,6 +121,8 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(1, 1)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.switchTool());
+    this.buttons.add(this.toolButton);
+    this.addFigureButtons();
 
     // Shows how big the eraser is, since the mouse arrow is hidden while erasing.
     this.eraserRing = this.add.graphics().setVisible(false);
@@ -142,8 +148,8 @@ export class MainScene extends Phaser.Scene {
     this.input.on(
       'pointerdown',
       (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-        // Clicking the tool button must not draw.
-        if (over.includes(this.toolButton)) return;
+        // Clicking a button must not draw.
+        if (over.some((object) => this.buttons.has(object))) return;
         this.lastPenPoint = { x: pointer.x, y: pointer.y };
         if (this.tool === 'pen') this.strokes.push([]);
         // A single click leaves a dot (or wipes one spot).
@@ -225,12 +231,18 @@ export class MainScene extends Phaser.Scene {
   /** Turn the newest picture into a living drawing; the other lines stay bridges. */
   private wakeUp(): void {
     const picked = lastPicture(this.strokes, PICTURE_REACH);
-    const pictureStrokes = picked.map((index) => this.strokes[index] ?? []);
-    const bounds = boundsOf(pictureStrokes.flat(), PEN_WIDTH / 2);
-    if (!bounds) {
+    if (!this.bringToLife(picked.map((index) => this.strokes[index] ?? []))) {
       this.showHint();
       return;
     }
+    this.strokes = this.strokes.filter((_, index) => !picked.includes(index));
+    this.redrawBridges();
+  }
+
+  /** Make a living drawing from lines on the screen. Returns false if there were none. */
+  private bringToLife(pictureStrokes: Stroke[]): boolean {
+    const bounds = boundsOf(pictureStrokes.flat(), PEN_WIDTH / 2);
+    if (!bounds) return false;
     // The body turns around its feet: the middle of its bottom edge.
     const feet = { x: (bounds.left + bounds.right) / 2, y: bounds.bottom };
     const strokes = pictureStrokes.map((stroke) => toLocal(stroke, feet));
@@ -246,9 +258,46 @@ export class MainScene extends Phaser.Scene {
       art,
       body: this.add.container(feet.x, feet.y, [art]),
     });
+    return true;
+  }
 
-    this.strokes = this.strokes.filter((_, index) => !picked.includes(index));
-    this.redrawBridges();
+  /** A row of buttons with funny characters; pressing one drops that character in. */
+  private addFigureButtons(): void {
+    const figures = makeFigures(PEN_MAX_PIECE);
+    const { size, gap, padding, cornerRadius, y } = FIGURE_BUTTONS;
+    const rowWidth = figures.length * size + (figures.length - 1) * gap;
+    figures.forEach((figure, i) => {
+      const x = GAME_WIDTH / 2 - rowWidth / 2 + size / 2 + i * (size + gap);
+      const frame = this.add.graphics();
+      frame.fillStyle(COLORS.buttonFill);
+      frame.fillRoundedRect(x - size / 2, y - size / 2, size, size, cornerRadius);
+      frame.lineStyle(2, COLORS.buttonBorder);
+      frame.strokeRoundedRect(x - size / 2, y - size / 2, size, size, cornerRadius);
+
+      // A small picture of the character, standing on the bottom of the button.
+      const bounds = boundsOf(figure.strokes.flat(), PEN_WIDTH / 2);
+      const height = bounds ? bounds.bottom - bounds.top : size;
+      const width = bounds ? bounds.right - bounds.left : size;
+      const scale = Math.min(1, (size - padding * 2) / Math.max(height, width));
+      const preview = this.add.graphics();
+      paintStrokes(preview, figure.strokes, COLORS.pen);
+      preview.setPosition(x, y + size / 2 - padding).setScale(scale);
+
+      const hitArea = this.add
+        .zone(x, y, size, size)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.dropFigure(figure, x));
+      this.buttons.add(hitArea);
+    });
+  }
+
+  /** Put a ready-made character into the world just below its button. */
+  private dropFigure(figure: Figure, x: number): void {
+    const bounds = boundsOf(figure.strokes.flat(), 0);
+    const height = bounds ? -bounds.top : 0;
+    const feet = { x, y: FIGURE_BUTTONS.spawnTop + height };
+    const placed = figure.strokes.map((stroke) => toLocal(stroke, { x: -feet.x, y: -feet.y }));
+    this.bringToLife(placed);
   }
 
   /** Wipe everything: all lines, bridges and living drawings. */

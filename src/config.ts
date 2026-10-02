@@ -7,6 +7,8 @@ export const COLORS = {
   pen: 0x222222,
   floor: 0xbbbbbb,
   eraserRing: 0x888888,
+  buttonBorder: 0xbbbbbb,
+  buttonFill: 0xf5f5f5,
   // Dark text so it shows up on the white background.
   text: '#222222',
 } as const;
@@ -32,7 +34,7 @@ export const PEN_MAX_PIECE = 10; // longer pieces are cut up so the eraser can w
 export const HELP_TEXT = { y: 24, fontSize: '18px' } as const;
 /** Pen/eraser switch, in the bottom right corner below the floor. */
 export const TOOL_BUTTON = { x: GAME_WIDTH - 12, y: GAME_HEIGHT - 8, fontSize: '22px' } as const;
-export const HINT_TEXT = { y: 60, fontSize: '24px', showMs: 1500 } as const;
+export const HINT_TEXT = { y: 150, fontSize: '24px', showMs: 1500 } as const;
 
 /** The line the living drawings walk on. */
 export const FLOOR_Y = GAME_HEIGHT - 40;
@@ -52,4 +54,15 @@ export const CREATURE = {
   wobbleDegrees: 6,
   wobblePerMs: 0.01,
   hopHeight: 4,
+} as const;
+
+/** The row of funny ready-made characters at the top. */
+export const FIGURE_BUTTONS = {
+  y: 80, // middle of the row
+  size: 64,
+  gap: 16,
+  padding: 8,
+  cornerRadius: 10,
+  // Where a picked character's top appears, just below the buttons; then it falls.
+  spawnTop: 125,
 } as const;
