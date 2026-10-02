@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   COLORS,
   CREATURE,
+  CREATURE_COLOURS,
   ERASER_WIDTH,
   FLOOR_THICKNESS,
   FLOOR_Y,
@@ -17,6 +18,7 @@ import {
   TOOL_BUTTON,
 } from '../config';
 import { eraseFromBody } from '../logic/bodyErase';
+import { creatureColour } from '../logic/colours';
 import {
   type Creature,
   type CreatureRules,
@@ -41,6 +43,7 @@ interface LivingDrawing {
   size: CreatureSize;
   /** Its lines, measured from its feet. */
   strokes: Stroke[];
+  colour: number;
   art: Phaser.GameObjects.Graphics;
   body: Phaser.GameObjects.Container;
 }
@@ -63,6 +66,8 @@ export class MainScene extends Phaser.Scene {
   private lastPenPoint: Point | null = null;
   private readonly solid = new SolidGrid(GAME_WIDTH, GAME_HEIGHT, SOLID_CELL, FLOOR_Y);
   private living: LivingDrawing[] = [];
+  /** How many drawings have woken up so far; picks the next colour. */
+  private wokenCount = 0;
   private hint!: Phaser.GameObjects.Text;
   private tool: Tool = 'pen';
   private toolButton!: Phaser.GameObjects.Text;
@@ -196,7 +201,7 @@ export class MainScene extends Phaser.Scene {
         y: drawing.state.y + cut.feetShift.y,
       };
       drawing.art.clear();
-      paintStrokes(drawing.art, cut.strokes);
+      paintStrokes(drawing.art, cut.strokes, drawing.colour);
       return true;
     });
   }
@@ -212,7 +217,7 @@ export class MainScene extends Phaser.Scene {
   private drawSegment(segment: Segment): void {
     for (const piece of splitSegment(segment, PEN_MAX_PIECE)) {
       this.strokes[this.strokes.length - 1]?.push(piece);
-      paintSegment(this.pen, piece);
+      paintSegment(this.pen, piece, COLORS.pen);
       this.solid.stamp(piece, PEN_WIDTH / 2);
     }
   }
@@ -229,12 +234,15 @@ export class MainScene extends Phaser.Scene {
     // The body turns around its feet: the middle of its bottom edge.
     const feet = { x: (bounds.left + bounds.right) / 2, y: bounds.bottom };
     const strokes = pictureStrokes.map((stroke) => toLocal(stroke, feet));
+    const colour = creatureColour(this.wokenCount, CREATURE_COLOURS);
+    this.wokenCount += 1;
     const art = this.add.graphics();
-    paintStrokes(art, strokes);
+    paintStrokes(art, strokes, colour);
     this.living.push({
       state: { x: feet.x, y: feet.y, fallSpeed: 0, dir: 1 },
       size: { halfWidth: (bounds.right - bounds.left) / 2, height: bounds.bottom - bounds.top },
       strokes,
+      colour,
       art,
       body: this.add.container(feet.x, feet.y, [art]),
     });
@@ -259,7 +267,7 @@ export class MainScene extends Phaser.Scene {
     this.pen.clear();
     this.solid.clear();
     for (const segment of this.strokes.flat()) {
-      paintSegment(this.pen, segment);
+      paintSegment(this.pen, segment, COLORS.pen);
       this.solid.stamp(segment, PEN_WIDTH / 2);
     }
   }
@@ -270,18 +278,26 @@ export class MainScene extends Phaser.Scene {
   }
 }
 
-function paintStrokes(graphics: Phaser.GameObjects.Graphics, strokes: readonly Stroke[]): void {
+function paintStrokes(
+  graphics: Phaser.GameObjects.Graphics,
+  strokes: readonly Stroke[],
+  colour: number,
+): void {
   for (const segment of strokes.flat()) {
-    paintSegment(graphics, segment);
+    paintSegment(graphics, segment, colour);
   }
 }
 
 /** Draw one round-ended pen line piece. */
-function paintSegment(graphics: Phaser.GameObjects.Graphics, segment: Segment): void {
+function paintSegment(
+  graphics: Phaser.GameObjects.Graphics,
+  segment: Segment,
+  colour: number,
+): void {
   const { from, to } = segment;
-  graphics.lineStyle(PEN_WIDTH, COLORS.pen);
+  graphics.lineStyle(PEN_WIDTH, colour);
   graphics.lineBetween(from.x, from.y, to.x, to.y);
-  graphics.fillStyle(COLORS.pen);
+  graphics.fillStyle(colour);
   graphics.fillCircle(from.x, from.y, PEN_WIDTH / 2);
   graphics.fillCircle(to.x, to.y, PEN_WIDTH / 2);
 }
