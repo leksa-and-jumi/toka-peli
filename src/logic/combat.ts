@@ -81,3 +81,24 @@ export function pushApart(a: Box, b: Box, margin: number): { a: number; b: numbe
 export function areFoes(kindA: string, kindB: string): boolean {
   return kindA !== kindB;
 }
+
+/** Which box the point is on; the last one wins, as it is drawn on top. -1 when none. */
+export function boxAt(boxes: readonly Box[], point: { x: number; y: number }): number {
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const box = boxes[i] as Box;
+    if (
+      point.x >= box.left &&
+      point.x <= box.right &&
+      point.y >= box.top &&
+      point.y <= box.bottom
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/** A box made bigger on every side, so it is easier to click. */
+export function growBox(box: Box, by: number): Box {
+  return { left: box.left - by, top: box.top - by, right: box.right + by, bottom: box.bottom + by };
+}

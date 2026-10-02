@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   areFoes,
   bodyBox,
+  boxAt,
+  growBox,
   bounceApart,
   bumpDamage,
   healthLevel,
@@ -115,5 +117,26 @@ describe('areFoes', () => {
 
   it('makes different kinds bump', () => {
     expect(areFoes('Kissa', 'Robotti')).toBe(true);
+  });
+});
+
+describe('boxAt', () => {
+  const left = bodyBox(100, 500, { halfWidth: 20, height: 40 });
+  const right = bodyBox(115, 500, { halfWidth: 20, height: 40 });
+
+  it('finds the creature under the mouse, the top one first', () => {
+    expect(boxAt([left, right], { x: 90, y: 480 })).toBe(0);
+    expect(boxAt([left, right], { x: 110, y: 480 })).toBe(1);
+  });
+
+  it('is -1 on empty paper', () => {
+    expect(boxAt([left, right], { x: 400, y: 100 })).toBe(-1);
+  });
+});
+
+describe('growBox', () => {
+  it('grows the box on every side', () => {
+    const box = { left: 10, top: 20, right: 30, bottom: 40 };
+    expect(growBox(box, 5)).toEqual({ left: 5, top: 15, right: 35, bottom: 45 });
   });
 });
