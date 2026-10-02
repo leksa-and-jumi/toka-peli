@@ -18,6 +18,7 @@ Peli julkaistaan GitHub Pagesiin aina, kun uusi versio valmistuu.
 - Piirrä lisää ja paina taas K, niin saat monta ukkoa.
 - Ylhäällä on **viisi hassua hahmoa** 🤡: hassu ukko, kissa, robotti, kummitus ja lumiukko. Klikkaa hahmoa, niin se hyppää peliin ja lähtee kävelemään!
 - **Törmäystaistelu!** 💥 Kaikilla hahmoilla on energiapalkki pään päällä. Kun kaksi hahmoa törmää, molemmat menettävät energiaa, ja isompi vie pienemmältä enemmän. Pienet hahmot ovat nopeampia! Samanlaiset hahmot ovat kavereita, eivätkä ne törmää toisiinsa 🤝. Kun energia loppuu, hahmo pyörähtää savuksi ja siitä lentää pieni kummitus 👻.
+- **Klikkaa** ukkoa, niin sen päälle tulee vihreä **+**-nappi. Paina +, niin saat samanlaisen ukon lisää! Samanlaiset ovat kavereita. 👯
 - Paina **S**, niin kaikki pyyhitään pois ja saat tyhjän paperin 🧹.
 - Paina **P** tai klikkaa oikean alakulman nappia, niin kynä muuttuu **kumiksi** 🧽. Kumilla pyyhit viivoja ja siltoja pois. Paina P uudestaan, niin pääset taas piirtämään.
 

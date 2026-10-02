@@ -115,3 +115,17 @@ export const EFFECTS = {
   ghostRise: 90,
   ghostMs: 1400,
 } as const;
+
+/** The round + button above a picked creature, and the ring that shows which one is picked. */
+export const COPY_BUTTON = {
+  radius: 16,
+  gap: 14, // pixels above the energy bar
+  colour: 0x43a047,
+  edgeColour: 0xffffff,
+  textColour: '#ffffff',
+  fontSize: '26px',
+  ringColour: 0x1e88e5,
+  ringPadding: 6,
+  clickPadding: 14, // clicks this close to a creature still pick it
+  popMs: 180,
+} as const;

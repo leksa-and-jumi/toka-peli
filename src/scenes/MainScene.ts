@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   COLORS,
   COMBAT,
+  COPY_BUTTON,
   CREATURE,
   CREATURE_COLOURS,
   FIGURE_BUTTONS,
@@ -10,6 +11,7 @@ import {
   FLOOR_Y,
   GAME_HEIGHT,
   GAME_WIDTH,
+  HEALTH_BAR,
   HELP_TEXT,
   HINT_TEXT,
   PEN_MAX_PIECE,
@@ -25,6 +27,8 @@ import { creatureColour } from '../logic/colours';
 import {
   areFoes,
   bodyBox,
+  boxAt,
+  growBox,
   bounceApart,
   bumpDamage,
   mass,
@@ -97,6 +101,12 @@ export class MainScene extends Phaser.Scene {
   /** Clickable things on screen; pressing them must not draw. */
   private readonly buttons = new Set<Phaser.GameObjects.GameObject>();
   private eraserRing!: Phaser.GameObjects.Graphics;
+  /** The creature the player clicked; a + button above it adds copies. */
+  private picked: LivingDrawing | null = null;
+  /** How many copies have been made; every other copy walks the other way. */
+  private copyCount = 0;
+  private pickRing!: Phaser.GameObjects.Graphics;
+  private copyButton!: Phaser.GameObjects.Container;
 
   constructor() {
     super('MainScene');
@@ -144,6 +154,7 @@ export class MainScene extends Phaser.Scene {
       .on('pointerdown', () => this.switchTool());
     this.buttons.add(this.toolButton);
     this.addFigureButtons();
+    this.addCopyButton();
 
     // Shows how big the eraser is, since the mouse arrow is hidden while erasing.
     this.eraserRing = this.add.graphics().setVisible(false);
@@ -155,7 +166,9 @@ export class MainScene extends Phaser.Scene {
     const seconds = delta / 1000;
     for (const drawing of this.living) {
       const before = drawing.state;
-      const rules = { ...RULES, walkSpeed: walkSpeedFor(drawing.size.height, WALK_SPEED) };
+      // The picked one waits, so its + button is easy to press.
+      const speed = drawing === this.picked ? 0 : walkSpeedFor(drawing.size.height, WALK_SPEED);
+      const rules = { ...RULES, walkSpeed: speed };
       drawing.state = stepCreature(before, drawing.size, rules, this.solid, seconds);
       drawing.cooldown = Math.max(0, drawing.cooldown - seconds);
       const { x, y, dir, fallSpeed } = drawing.state;
@@ -173,6 +186,85 @@ export class MainScene extends Phaser.Scene {
       );
     }
     this.bumpCreatures();
+    this.showPicked();
+  }
+
+  /** Keep the ring and the + button on the picked creature, or hide them. */
+  private showPicked(): void {
+    const picked = this.picked;
+    if (picked && !this.living.includes(picked)) this.picked = null;
+    if (!this.picked) {
+      this.pickRing.setVisible(false);
+      this.copyButton.setVisible(false);
+      return;
+    }
+    const { x, y } = this.picked.state;
+    const { halfWidth, height } = this.picked.size;
+    const pad = COPY_BUTTON.ringPadding;
+    this.pickRing.clear().setVisible(true);
+    this.pickRing.lineStyle(2, COPY_BUTTON.ringColour);
+    this.pickRing.strokeRoundedRect(
+      x - halfWidth - pad,
+      y - height - pad,
+      (halfWidth + pad) * 2,
+      height + pad * 2,
+      pad,
+    );
+    const barTop = y - height - HEALTH_BAR.gap - HEALTH_BAR.height;
+    this.copyButton.setVisible(true).setPosition(x, barTop - COPY_BUTTON.gap - COPY_BUTTON.radius);
+  }
+
+  private addCopyButton(): void {
+    this.pickRing = this.add.graphics().setDepth(7).setVisible(false);
+    const { radius } = COPY_BUTTON;
+    const circle = this.add
+      .circle(0, 0, radius, COPY_BUTTON.colour)
+      .setStrokeStyle(2, COPY_BUTTON.edgeColour);
+    const plus = this.add
+      .text(0, -1, '+', {
+        fontSize: COPY_BUTTON.fontSize,
+        fontStyle: 'bold',
+        color: COPY_BUTTON.textColour,
+      })
+      .setOrigin(0.5);
+    this.copyButton = this.add
+      .container(0, 0, [circle, plus])
+      .setSize(radius * 2, radius * 2)
+      .setDepth(11)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.copyPicked());
+    this.buttons.add(this.copyButton);
+  }
+
+  /** Drop in one more of the picked creature: same look, same kind, so they are friends. */
+  private copyPicked(): void {
+    const original = this.picked;
+    if (!original) return;
+    const { halfWidth, height } = original.size;
+    const x = Math.min(GAME_WIDTH - halfWidth, Math.max(halfWidth, original.state.x));
+    const feet = { x, y: FIGURE_BUTTONS.spawnTop + height };
+    const art = this.add.graphics();
+    paintStrokes(art, original.strokes, original.colour);
+    const body = this.add.container(feet.x, feet.y, [art]);
+    this.living.push({
+      ...original,
+      state: { x: feet.x, y: feet.y, fallSpeed: 0, dir: this.copyCount % 2 === 0 ? -1 : 1 },
+      strokes: original.strokes.map((stroke) => [...stroke]),
+      art,
+      body,
+      health: COMBAT.maxHealth,
+      healthBar: this.add.graphics().setDepth(8),
+      cooldown: 0,
+    });
+    this.copyCount += 1;
+    body.setScale(0);
+    this.tweens.add({ targets: body, scale: 1, duration: COPY_BUTTON.popMs, ease: 'Back.easeOut' });
+    this.tweens.add({
+      targets: this.copyButton,
+      scale: { from: 1.3, to: 1 },
+      duration: COPY_BUTTON.popMs,
+    });
   }
 
   /** Creatures that touch bump into each other: both lose energy, the bigger hits harder. */
@@ -248,6 +340,15 @@ export class MainScene extends Phaser.Scene {
       (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
         // Clicking a button must not draw.
         if (over.some((object) => this.buttons.has(object))) return;
+        // With the pen, clicking a creature picks it instead of drawing.
+        if (this.tool === 'pen') {
+          const boxes = this.living.map((d) =>
+            growBox(bodyBox(d.state.x, d.state.y, d.size), COPY_BUTTON.clickPadding),
+          );
+          const hit = boxAt(boxes, { x: pointer.x, y: pointer.y });
+          this.picked = this.living[hit] ?? null;
+          if (this.picked) return;
+        }
         this.lastPenPoint = { x: pointer.x, y: pointer.y };
         if (this.tool === 'pen') this.strokes.push([]);
         // A single click leaves a dot (or wipes one spot).
@@ -412,6 +513,7 @@ export class MainScene extends Phaser.Scene {
       drawing.healthBar.destroy();
     }
     this.living = [];
+    this.picked = null;
     this.strokes = [];
     this.lastPenPoint = null;
     this.redrawBridges();
